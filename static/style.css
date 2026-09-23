@@ -41,3 +41,13 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   color: #b91c1c;
   margin-bottom: 1rem;
 }
+#suggestions ul {
+  list-style: none;
+  padding: 0;
+}
+#suggestions li { margin-bottom: 0.4rem; }
+#suggestions a {
+  color: #2563eb;
+  text-decoration: none;
+}
+#suggestions a:hover { text-decoration: underline; }
