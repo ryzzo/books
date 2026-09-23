@@ -33,8 +33,22 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   margin-bottom: 1.5rem;
 }
 #result { display: none; }
+#result-image {
+  display: none;
+  max-width: 200px;
+  max-height: 300px;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
 #result h2 { margin-bottom: 0.25rem; }
 #result a { font-size: 0.9rem; }
+#result-meta {
+  display: none;
+  color: #6b7280;
+  font-size: 0.9rem;
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
 #loading { display: none; }
 #error {
   display: none;

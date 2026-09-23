@@ -13,7 +13,9 @@
   <p id="error"></p>
 
   <div id="result">
+    <img id="result-image" alt="" />
     <h2 id="result-title"></h2>
+    <p id="result-meta"></p>
     <p id="result-summary"></p>
     <a id="result-link" target="_blank" rel="noopener noreferrer">View on Wikipedia</a>
   </div>
@@ -25,7 +27,9 @@
     const loadingEl = document.getElementById("loading");
     const errorEl = document.getElementById("error");
     const resultEl = document.getElementById("result");
+    const resultImage = document.getElementById("result-image");
     const resultTitle = document.getElementById("result-title");
+    const resultMeta = document.getElementById("result-meta");
     const resultSummary = document.getElementById("result-summary");
     const resultLink = document.getElementById("result-link");
 
@@ -52,7 +56,23 @@
         }
 
         const data = await response.json();
+
+        if (data.image_url) {
+          resultImage.src = data.image_url;
+          resultImage.alt = data.title;
+          resultImage.style.display = "block";
+        } else {
+          resultImage.style.display = "none";
+        }
+
         resultTitle.textContent = data.title;
+
+        const meta = [];
+        if (data.genre) meta.push(`Genre: ${data.genre}`);
+        if (data.rating) meta.push(`Rating: ${data.rating}`);
+        resultMeta.textContent = meta.join(" · ");
+        resultMeta.style.display = meta.length ? "block" : "none";
+
         resultSummary.textContent = data.summary || "No summary available.";
         if (data.url) {
           resultLink.href = data.url;
