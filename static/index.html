@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Book Summary</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    max-width: 640px;
+    margin: 4rem auto;
+    padding: 0 1.5rem;
+    line-height: 1.5;
+  }
+  h1 { font-size: 1.5rem; }
+  form { display: flex; gap: 0.5rem; margin-bottom: 2rem; }
+  input {
+    flex: 1;
+    padding: 0.6rem 0.8rem;
+    font-size: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+  }
+  button {
+    padding: 0.6rem 1.2rem;
+    font-size: 1rem;
+    border: none;
+    border-radius: 6px;
+    background: #2563eb;
+    color: white;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  #result { display: none; }
+  #result h2 { margin-bottom: 0.25rem; }
+  #result a { font-size: 0.9rem; }
+  #error {
+    display: none;
+    color: #b91c1c;
+    margin-bottom: 1rem;
+  }
+</style>
+</head>
+<body>
+  <h1>Book Summary Lookup</h1>
+  <form id="search-form">
+    <input id="title-input" type="text" placeholder="e.g. The Hobbit" autocomplete="off" required />
+    <button id="submit-btn" type="submit">Search</button>
+  </form>
+
+  <p id="error"></p>
+
+  <div id="result">
+    <h2 id="result-title"></h2>
+    <p id="result-summary"></p>
+    <a id="result-link" target="_blank" rel="noopener noreferrer">View on Wikipedia</a>
+  </div>
+
+  <script>
+    const form = document.getElementById("search-form");
+    const input = document.getElementById("title-input");
+    const button = document.getElementById("submit-btn");
+    const errorEl = document.getElementById("error");
+    const resultEl = document.getElementById("result");
+    const resultTitle = document.getElementById("result-title");
+    const resultSummary = document.getElementById("result-summary");
+    const resultLink = document.getElementById("result-link");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const title = input.value.trim();
+      if (!title) return;
+
+      button.disabled = true;
+      button.textContent = "Searching...";
+      errorEl.style.display = "none";
+      resultEl.style.display = "none";
+
+      try {
+        const response = await fetch("/books/summary", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.detail || `Request failed (${response.status})`);
+        }
+
+        const data = await response.json();
+        resultTitle.textContent = data.title;
+        resultSummary.textContent = data.summary || "No summary available.";
+        if (data.url) {
+          resultLink.href = data.url;
+          resultLink.style.display = "inline";
+        } else {
+          resultLink.style.display = "none";
+        }
+        resultEl.style.display = "block";
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = "block";
+      } finally {
+        button.disabled = false;
+        button.textContent = "Search";
+      }
+    });
+  </script>
+</body>
+</html>

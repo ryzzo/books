@@ -2,11 +2,12 @@ from typing import Optional
 
 import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 app = FastAPI(title="Book Summary API")
 
-WIKIPEDIA_SUMMARY_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/{title}"
+WIKIPEDIA_API_URL = "https://en.wikipedia.org/w/api.php"
 HEADERS = {"User-Agent": "books-api/1.0 (https://github.com/example/books-api)"}
 
 
@@ -21,18 +22,29 @@ class BookSummary(BaseModel):
 
 
 async def fetch_wikipedia_summary(title: str) -> BookSummary:
-    async with httpx.AsyncClient(timeout=10, headers=HEADERS) as client:
-        response = await client.get(WIKIPEDIA_SUMMARY_URL.format(title=title))
-
-    if response.status_code == 404:
-        raise HTTPException(status_code=404, detail=f"No Wikipedia page found for '{title}'")
+    params = {
+        "action": "query",
+        "format": "json",
+        "prop": "extracts",
+        "explaintext": "1",
+        "exintro": "1",
+        "redirects": "1",
+        "titles": title,
+    }
+    async with httpx.AsyncClient(timeout=15, headers=HEADERS) as client:
+        response = await client.get(WIKIPEDIA_API_URL, params=params)
     response.raise_for_status()
 
-    data = response.json()
+    pages = response.json().get("query", {}).get("pages", {})
+    page = next(iter(pages.values()), None)
+    if page is None or "missing" in page:
+        raise HTTPException(status_code=404, detail=f"No Wikipedia page found for '{title}'")
+
+    page_title = page.get("title", title)
     return BookSummary(
-        title=data.get("title", title),
-        summary=data.get("extract", ""),
-        url=data.get("content_urls", {}).get("desktop", {}).get("page"),
+        title=page_title,
+        summary=page.get("extract", ""),
+        url=f"https://en.wikipedia.org/wiki/{page_title.replace(' ', '_')}",
     )
 
 
@@ -51,6 +63,4 @@ async def health():
     return {"status": "ok"}
 
 
-@app.get("/")
-async def root():
-    return {"docs": "/docs", "example": "/books/Dune/summary"}
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
