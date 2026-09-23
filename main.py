@@ -1,3 +1,4 @@
+import re
 from typing import Optional
 
 import httpx
@@ -26,14 +27,33 @@ def get_summarizer():
     return _summarizer
 
 
+def _clean_summary_text(text: str) -> str:
+    text = re.sub(r"\s+([.,!?;:])", r"\1", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _truncate_to_sentences(text: str, word_limit: int) -> str:
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    kept = []
+    word_count = 0
+    for sentence in sentences:
+        sentence_words = len(sentence.split())
+        if kept and word_count + sentence_words > word_limit:
+            break
+        kept.append(sentence)
+        word_count += sentence_words
+    return " ".join(kept) if kept else text
+
+
 def summarize_text(text: str, word_limit: int = SUMMARY_WORD_LIMIT) -> str:
     if not text.strip():
         return text
 
     summarizer = get_summarizer()
-    # ~1.3 tokens per word for BART's tokenizer; cap generation accordingly.
-    max_tokens = int(word_limit * 1.3)
-    min_tokens = int(word_limit * 0.8)
+    # Give the model room to finish its last sentence naturally; we trim to
+    # the word limit afterwards on a sentence boundary rather than mid-sentence.
+    max_tokens = int(word_limit * 1.6)
+    min_tokens = int(word_limit * 0.6)
     result = summarizer(
         text,
         max_length=max_tokens,
@@ -41,12 +61,8 @@ def summarize_text(text: str, word_limit: int = SUMMARY_WORD_LIMIT) -> str:
         truncation=True,
         do_sample=False,
     )
-    summary = result[0]["summary_text"].strip()
-
-    words = summary.split()
-    if len(words) > word_limit:
-        summary = " ".join(words[:word_limit]).rstrip(",;:") + "."
-    return summary
+    summary = _clean_summary_text(result[0]["summary_text"])
+    return _truncate_to_sentences(summary, word_limit)
 
 
 class BookRequest(BaseModel):
