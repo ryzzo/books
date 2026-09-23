@@ -13,7 +13,7 @@ WIKIPEDIA_API_URL = "https://en.wikipedia.org/w/api.php"
 HEADERS = {"User-Agent": "books-api/1.0 (https://github.com/example/books-api)"}
 
 SUMMARY_MODEL = "sshleifer/distilbart-cnn-12-6"
-SUMMARY_WORD_LIMIT = 100
+SUMMARY_WORD_LIMIT = 200
 
 _summarizer = None
 
