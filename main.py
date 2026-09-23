@@ -2,6 +2,7 @@ from typing import Optional
 
 import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -9,6 +10,43 @@ app = FastAPI(title="Book Summary API")
 
 WIKIPEDIA_API_URL = "https://en.wikipedia.org/w/api.php"
 HEADERS = {"User-Agent": "books-api/1.0 (https://github.com/example/books-api)"}
+
+SUMMARY_MODEL = "sshleifer/distilbart-cnn-12-6"
+SUMMARY_WORD_LIMIT = 100
+
+_summarizer = None
+
+
+def get_summarizer():
+    global _summarizer
+    if _summarizer is None:
+        from transformers import pipeline
+
+        _summarizer = pipeline("summarization", model=SUMMARY_MODEL)
+    return _summarizer
+
+
+def summarize_text(text: str, word_limit: int = SUMMARY_WORD_LIMIT) -> str:
+    if not text.strip():
+        return text
+
+    summarizer = get_summarizer()
+    # ~1.3 tokens per word for BART's tokenizer; cap generation accordingly.
+    max_tokens = int(word_limit * 1.3)
+    min_tokens = int(word_limit * 0.8)
+    result = summarizer(
+        text,
+        max_length=max_tokens,
+        min_length=min_tokens,
+        truncation=True,
+        do_sample=False,
+    )
+    summary = result[0]["summary_text"].strip()
+
+    words = summary.split()
+    if len(words) > word_limit:
+        summary = " ".join(words[:word_limit]).rstrip(",;:") + "."
+    return summary
 
 
 class BookRequest(BaseModel):
@@ -64,9 +102,11 @@ async def fetch_wikipedia_summary(title: str) -> BookSummary:
         )
 
     page_title = page.get("title", title)
+    extract = page.get("extract", "")
+    summary = await run_in_threadpool(summarize_text, extract)
     return BookSummary(
         title=page_title,
-        summary=page.get("extract", ""),
+        summary=summary,
         url=f"https://en.wikipedia.org/wiki/{page_title.replace(' ', '_')}",
     )
 
