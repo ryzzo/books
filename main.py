@@ -1,4 +1,3 @@
-import asyncio
 import re
 from typing import Optional
 
@@ -119,34 +118,12 @@ def _extract_infobox_field(wikitext: str, field_names: list[str]) -> Optional[st
     return None
 
 
-async def fetch_infobox_fields(title: str) -> tuple[Optional[str], Optional[str]]:
-    params = {
-        "action": "query",
-        "format": "json",
-        "prop": "revisions",
-        "rvprop": "content",
-        "rvslots": "main",
-        "rvsection": "0",
-        "formatversion": "2",
-        "redirects": "1",
-        "titles": title,
-    }
-    async with httpx.AsyncClient(timeout=15, headers=HEADERS) as client:
-        response = await client.get(WIKIPEDIA_API_URL, params=params)
-    response.raise_for_status()
+BOOK_INFOBOX_PATTERN = re.compile(r"\{\{\s*infobox\s+(?:book|novel)\b", re.IGNORECASE)
 
-    pages = response.json().get("query", {}).get("pages", [])
-    if not pages:
-        return None, None
 
-    revisions = pages[0].get("revisions", [])
-    if not revisions:
-        return None, None
-
-    wikitext = revisions[0].get("slots", {}).get("main", {}).get("content", "")
-    genre = _extract_infobox_field(wikitext, ["genre"])
-    rating = _extract_infobox_field(wikitext, ["rating", "stars", "score", "metascore"])
-    return genre, rating
+def _get_wikitext(page: dict) -> str:
+    revisions = page.get("revisions") or [{}]
+    return revisions[0].get("slots", {}).get("main", {}).get("content", "")
 
 
 async def fetch_wikipedia_suggestions(title: str) -> list[str]:
@@ -169,21 +146,25 @@ async def fetch_wikipedia_summary(title: str) -> BookSummary:
     params = {
         "action": "query",
         "format": "json",
-        "prop": "extracts|pageimages",
+        "prop": "extracts|pageimages|revisions",
         "explaintext": "1",
         "exintro": "1",
         "redirects": "1",
         "piprop": "thumbnail",
         "pithumbsize": "500",
+        "rvprop": "content",
+        "rvslots": "main",
+        "rvsection": "0",
+        "formatversion": "2",
         "titles": title,
     }
     async with httpx.AsyncClient(timeout=15, headers=HEADERS) as client:
         response = await client.get(WIKIPEDIA_API_URL, params=params)
     response.raise_for_status()
 
-    pages = response.json().get("query", {}).get("pages", {})
-    page = next(iter(pages.values()), None)
-    if page is None or "missing" in page:
+    pages = response.json().get("query", {}).get("pages", [])
+    page = pages[0] if pages else None
+    if page is None or page.get("missing"):
         suggestions = await fetch_wikipedia_suggestions(title)
         raise HTTPException(
             status_code=404,
@@ -193,13 +174,23 @@ async def fetch_wikipedia_summary(title: str) -> BookSummary:
             },
         )
 
+    wikitext = _get_wikitext(page)
+    if not BOOK_INFOBOX_PATTERN.search(wikitext):
+        suggestions = await fetch_wikipedia_suggestions(title)
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "message": f"'{title}' doesn't appear to be a book on Wikipedia",
+                "suggestions": suggestions,
+            },
+        )
+
     page_title = page.get("title", title)
     extract = page.get("extract", "")
     image_url = page.get("thumbnail", {}).get("source")
-    summary, (genre, rating) = await asyncio.gather(
-        run_in_threadpool(summarize_text, extract),
-        fetch_infobox_fields(page_title),
-    )
+    genre = _extract_infobox_field(wikitext, ["genre"])
+    rating = _extract_infobox_field(wikitext, ["rating", "stars", "score", "metascore"])
+    summary = await run_in_threadpool(summarize_text, extract)
     return BookSummary(
         title=page_title,
         summary=summary,
