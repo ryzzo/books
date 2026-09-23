@@ -11,7 +11,6 @@
 
   <p id="loading">Searching...</p>
   <p id="error"></p>
-  <div id="suggestions"></div>
 
   <div id="result">
     <h2 id="result-title"></h2>
@@ -25,29 +24,10 @@
 
     const loadingEl = document.getElementById("loading");
     const errorEl = document.getElementById("error");
-    const suggestionsEl = document.getElementById("suggestions");
     const resultEl = document.getElementById("result");
     const resultTitle = document.getElementById("result-title");
     const resultSummary = document.getElementById("result-summary");
     const resultLink = document.getElementById("result-link");
-
-    function showSuggestions(suggestions) {
-      if (!suggestions || suggestions.length === 0) return;
-      const heading = document.createElement("p");
-      heading.textContent = "Did you mean:";
-      suggestionsEl.appendChild(heading);
-
-      const list = document.createElement("ul");
-      suggestions.forEach((s) => {
-        const li = document.createElement("li");
-        const link = document.createElement("a");
-        link.href = "/result.html?title=" + encodeURIComponent(s);
-        link.textContent = s;
-        li.appendChild(link);
-        list.appendChild(li);
-      });
-      suggestionsEl.appendChild(list);
-    }
 
     async function loadSummary() {
       if (!title) {
@@ -68,9 +48,7 @@
           const data = await response.json().catch(() => ({}));
           const detail = data.detail;
           const message = typeof detail === "string" ? detail : detail?.message;
-          const err = new Error(message || `Request failed (${response.status})`);
-          err.suggestions = typeof detail === "object" ? detail?.suggestions : null;
-          throw err;
+          throw new Error(message || `Request failed (${response.status})`);
         }
 
         const data = await response.json();
@@ -86,7 +64,6 @@
       } catch (err) {
         errorEl.textContent = err.message;
         errorEl.style.display = "block";
-        showSuggestions(err.suggestions);
       } finally {
         loadingEl.style.display = "none";
       }

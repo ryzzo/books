@@ -10,15 +10,86 @@
   <h1>Book Summary Lookup</h1>
   <form id="search-form">
     <input id="title-input" type="text" placeholder="e.g. The Hobbit" autocomplete="off" required />
-    <button type="submit">Search</button>
+    <button id="submit-btn" type="submit">Search</button>
   </form>
 
+  <p id="error"></p>
+  <div id="suggestions"></div>
+
   <script>
-    document.getElementById("search-form").addEventListener("submit", (e) => {
+    const form = document.getElementById("search-form");
+    const input = document.getElementById("title-input");
+    const button = document.getElementById("submit-btn");
+    const errorEl = document.getElementById("error");
+    const suggestionsEl = document.getElementById("suggestions");
+
+    function clearFeedback() {
+      errorEl.style.display = "none";
+      errorEl.textContent = "";
+      suggestionsEl.innerHTML = "";
+    }
+
+    function showSuggestions(suggestions) {
+      if (!suggestions || suggestions.length === 0) return;
+      const heading = document.createElement("p");
+      heading.textContent = "Did you mean:";
+      suggestionsEl.appendChild(heading);
+
+      const list = document.createElement("ul");
+      suggestions.forEach((s) => {
+        const li = document.createElement("li");
+        const link = document.createElement("a");
+        link.href = "#";
+        link.textContent = s;
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          input.value = s;
+          search(s);
+        });
+        li.appendChild(link);
+        list.appendChild(li);
+      });
+      suggestionsEl.appendChild(list);
+    }
+
+    async function search(title) {
+      button.disabled = true;
+      button.textContent = "Searching...";
+      clearFeedback();
+
+      try {
+        const response = await fetch("/books/summary", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          const detail = data.detail;
+          const message = typeof detail === "string" ? detail : detail?.message;
+          errorEl.textContent = message || `Request failed (${response.status})`;
+          errorEl.style.display = "block";
+          showSuggestions(typeof detail === "object" ? detail?.suggestions : null);
+          return;
+        }
+
+        const data = await response.json();
+        window.location.href = "/result.html?title=" + encodeURIComponent(data.title);
+      } catch (err) {
+        errorEl.textContent = "Something went wrong. Please try again.";
+        errorEl.style.display = "block";
+      } finally {
+        button.disabled = false;
+        button.textContent = "Search";
+      }
+    }
+
+    form.addEventListener("submit", (e) => {
       e.preventDefault();
-      const title = document.getElementById("title-input").value.trim();
+      const title = input.value.trim();
       if (!title) return;
-      window.location.href = "/result.html?title=" + encodeURIComponent(title);
+      search(title);
     });
   </script>
 </body>
